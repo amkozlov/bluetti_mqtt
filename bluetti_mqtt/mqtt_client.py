@@ -494,6 +494,7 @@ class MQTTClient:
         bus: EventBus,
         hostname: str,
         home_assistant_mode: str,
+        topic_prefix: str = None,
         port: int = 1883,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -504,6 +505,7 @@ class MQTTClient:
         self.username = username
         self.password = password
         self.home_assistant_mode = home_assistant_mode
+        self.topic_prefix = topic_prefix
         self.devices = []
 
     async def run(self):
@@ -555,10 +557,12 @@ class MQTTClient:
         if self.home_assistant_mode == 'none':
             return
 
-        def payload(id: str, device: BluettiDevice, field: MqttFieldConfig) -> str:
+        def payload(topic_prefix: str, id: str, device: BluettiDevice, field: MqttFieldConfig) -> str:
+            if not topic_prefix:
+              topic_prefix = f'bluetti/state/{device.type}-{device.sn}'
             ha_id = id if not field.id_override else field.id_override
             payload_dict = {
-                'state_topic': f'bluetti/state/{device.type}-{device.sn}/{id}',
+                'state_topic': f'{topic_prefix}/{id}',
                 'device': {
                     'identifiers': [
                         f'{device.sn}'
@@ -599,7 +603,7 @@ class MQTTClient:
             # Publish config
             await client.publish(
                 f'homeassistant/{type}/{device.sn}_{name}/config',
-                payload=payload(name, device, field).encode(),
+                payload=payload(self.topic_prefix, name, device, field).encode(),
                 retain=True
             )
 
@@ -614,7 +618,7 @@ class MQTTClient:
                 # Publish config
                 await client.publish(
                     f'homeassistant/sensor/{device.sn}_{field.id_override}/config',
-                    payload=payload(f'pack_details{pack}', device, field).encode(),
+                    payload=payload(self.topic_prefix, f'pack_details{pack}', device, field).encode(),
                     retain=True
                 )
 
@@ -623,7 +627,7 @@ class MQTTClient:
             for name, field in DC_INPUT_FIELDS.items():
                 await client.publish(
                     f'homeassistant/sensor/{device.sn}_{name}/config',
-                    payload=payload(name, device, field).encode(),
+                    payload=payload(self.topic_prefix, name, device, field).encode(),
                     retain=True
                 )
 
@@ -669,7 +673,10 @@ class MQTTClient:
 
     async def _handle_message(self, client: Client, msg: ParserMessage):
         logging.debug(f'Got a message from {msg.device}: {msg.parsed}')
-        topic_prefix = f'bluetti/state/{msg.device.type}-{msg.device.sn}/'
+        if self.topic_prefix:
+          topic_prefix = f'{self.topic_prefix}/'
+        else:
+          topic_prefix = f'bluetti/state/{msg.device.type}-{msg.device.sn}/'
 
         # Publish normal fields
         for name, value in msg.parsed.items():

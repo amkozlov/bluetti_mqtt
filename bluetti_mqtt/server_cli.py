@@ -53,6 +53,13 @@ class CommandLineHandler:
             choices=['normal', 'none', 'advanced'],
             help='What fields to configure in Home Assistant - defaults to most fields ("normal")')
         parser.add_argument(
+            '--topic-prefix',
+            type=str,
+            dest="topic_prefix",
+            default=None,
+            help='Custom MQTT topic prefix')
+
+        parser.add_argument(
             'addresses',
             metavar='ADDRESS',
             nargs='*',
@@ -107,6 +114,7 @@ class CommandLineHandler:
             bus=bus,
             hostname=args.hostname,
             home_assistant_mode=args.ha_config,
+            topic_prefix=args.topic_prefix,
             port=args.port,
             username=args.username,
             password=args.password,
